@@ -2926,7 +2926,8 @@ fn ptrType(
     const simple = ptr_info.ast.align_node == 0 and
         ptr_info.ast.addrspace_node == 0 and
         ptr_info.ast.sentinel == 0 and
-        ptr_info.ast.bit_range_start == 0;
+        ptr_info.ast.bit_range_start == 0 and
+        ptr_info.iso_token == null;
 
     if (simple) {
         const result = try gz.add(.{ .tag = .ptr_type_simple, .data = .{
@@ -2995,6 +2996,7 @@ fn ptrType(
             .flags = .{
                 .is_allowzero = ptr_info.allowzero_token != null,
                 .is_mutable = ptr_info.const_token == null,
+                .is_unique = ptr_info.iso_token != null,
                 .is_volatile = ptr_info.volatile_token != null,
                 .has_sentinel = sentinel_ref != .none,
                 .has_align = align_ref != .none,

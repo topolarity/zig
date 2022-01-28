@@ -280,6 +280,9 @@ pub fn renderError(tree: Ast, parse_error: Error, stream: anytype) !void {
         .extra_const_qualifier => {
             return stream.writeAll("extra const qualifier");
         },
+        .extra_iso_qualifier => {
+            return stream.writeAll("extra iso qualifier");
+        },
         .extra_volatile_qualifier => {
             return stream.writeAll("extra volatile qualifier");
         },
@@ -1949,6 +1952,7 @@ fn fullPtrType(tree: Ast, info: full.PtrType.Components) full.PtrType {
         .size = size,
         .allowzero_token = null,
         .const_token = null,
+        .iso_token = null,
         .volatile_token = null,
         .ast = info,
     };
@@ -1962,6 +1966,7 @@ fn fullPtrType(tree: Ast, info: full.PtrType.Components) full.PtrType {
         switch (token_tags[i]) {
             .keyword_allowzero => result.allowzero_token = i,
             .keyword_const => result.const_token = i,
+            .keyword_iso => result.iso_token = i,
             .keyword_volatile => result.volatile_token = i,
             .keyword_align => {
                 assert(info.align_node != 0);
@@ -2367,6 +2372,7 @@ pub const full = struct {
         size: std.builtin.TypeInfo.Pointer.Size,
         allowzero_token: ?TokenIndex,
         const_token: ?TokenIndex,
+        iso_token: ?TokenIndex,
         volatile_token: ?TokenIndex,
         ast: Components,
 
@@ -2489,6 +2495,7 @@ pub const Error = struct {
         extra_align_qualifier,
         extra_allowzero_qualifier,
         extra_const_qualifier,
+        extra_iso_qualifier,
         extra_volatile_qualifier,
         ptr_mod_on_array_child_type,
         invalid_bit_range,

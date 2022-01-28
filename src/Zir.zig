@@ -493,7 +493,8 @@ pub const Inst = struct {
         /// this instruction; a following 'ret' instruction will do the diversion.
         /// Uses the `str_tok` union field.
         ret_err_value_code,
-        /// Create a pointer type that does not have a sentinel, alignment, address space, or bit range specified.
+        /// Create a pointer type that does not have a sentinel, alignment, address space, 
+        /// or bit range specified, and is also not unique.
         /// Uses the `ptr_type_simple` union field.
         ptr_type_simple,
         /// Create a pointer type which can have a sentinel, alignment, address space, and/or bit range.
@@ -2114,12 +2115,12 @@ pub const Inst = struct {
             flags: packed struct {
                 is_allowzero: bool,
                 is_mutable: bool,
+                is_unique: bool,
                 is_volatile: bool,
                 has_sentinel: bool,
                 has_align: bool,
                 has_addrspace: bool,
                 has_bit_range: bool,
-                _: u1 = undefined,
             },
             size: std.builtin.TypeInfo.Pointer.Size,
             /// Index into extra. See `PtrType`.

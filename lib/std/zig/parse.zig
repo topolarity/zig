@@ -1464,7 +1464,7 @@ const Parser = struct {
     ///     <- QUESTIONMARK
     ///      / KEYWORD_anyframe MINUSRARROW
     ///      / SliceTypeStart (ByteAlign / AddrSpace / KEYWORD_const / KEYWORD_volatile / KEYWORD_allowzero)*
-    ///      / PtrTypeStart (AddrSpace / KEYWORD_align LPAREN Expr (COLON INTEGER COLON INTEGER)? RPAREN / KEYWORD_const / KEYWORD_volatile / KEYWORD_allowzero)*
+    ///      / PtrTypeStart (AddrSpace / KEYWORD_align LPAREN Expr (COLON INTEGER COLON INTEGER)? RPAREN / KEYWORD_iso / KEYWORD_const / KEYWORD_volatile / KEYWORD_allowzero)*
     ///      / ArrayTypeStart
     /// SliceTypeStart <- LBRACKET (COLON Expr)? RBRACKET
     /// PtrTypeStart
@@ -1708,6 +1708,7 @@ const Parser = struct {
                         switch (p.token_tags[p.tok_i]) {
                             .keyword_align,
                             .keyword_const,
+                            .keyword_iso,
                             .keyword_volatile,
                             .keyword_allowzero,
                             .keyword_addrspace,
@@ -3083,6 +3084,7 @@ const Parser = struct {
             .bit_range_end = 0,
         };
         var saw_const = false;
+        var saw_iso = false;
         var saw_volatile = false;
         var saw_allowzero = false;
         var saw_addrspace = false;
@@ -3110,6 +3112,13 @@ const Parser = struct {
                     }
                     p.tok_i += 1;
                     saw_const = true;
+                },
+                .keyword_iso => {
+                    if (saw_iso) {
+                        try p.warn(.extra_iso_qualifier);
+                    }
+                    p.tok_i += 1;
+                    saw_iso = true;
                 },
                 .keyword_volatile => {
                     if (saw_volatile) {
