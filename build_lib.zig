@@ -13,6 +13,7 @@ const Builder = std.build.Builder;
 const ArrayList = std.ArrayList;
 const BufMap = std.BufMap;
 const Step = std.build.Step;
+const Pkg = std.build.Pkg;
 
 pub const zig_version = std.builtin.Version{ .major = 0, .minor = 10, .patch = 0 };
 
@@ -151,7 +152,19 @@ pub fn installLibFiles(b: *Builder) !void {
     });
 }
 
-pub fn link(b: *Builder, obj: *LibExeObjStep, cfg: *ZigBuildOptions, test_cfg: ?*ZigTestOptions) !void {
+fn root() []const u8 {
+    return std.fs.path.dirname(@src().file) orelse ".";
+}
+
+const root_path = root() ++ "/";
+const package_path = root_path ++ "src/lib.zig";
+
+pub fn link(b: *Builder, obj: *LibExeObjStep, cfg: *ZigBuildOptions, test_cfg: ?*ZigTestOptions) !Pkg {
+    var pkg = Pkg{ 
+        .name = "zig", 
+        .path = .{ .path = package_path }, 
+    };
+
     // Step 1: Normalize configs
     if (cfg.is_stage1 or cfg.static_llvm) {
         cfg.enable_llvm = true;
@@ -173,7 +186,7 @@ pub fn link(b: *Builder, obj: *LibExeObjStep, cfg: *ZigBuildOptions, test_cfg: ?
 
     // Step 2: Add build_options
     const options = b.addOptions();
-    obj.addOptions("build_options", options);
+    pkg.dependencies = &[_]Pkg{options.getPackage("build_options")};
 
     const version = if (cfg.version_string) |version| version else blk: {
         if (git_version_string(b)) |v| {
@@ -273,6 +286,8 @@ pub fn link(b: *Builder, obj: *LibExeObjStep, cfg: *ZigBuildOptions, test_cfg: ?
         // (Zig-compiled c++ requires -lc++, but linking pre-existing modules may want system libc++)
         obj.linkLibCpp();
     }
+
+    return pkg;
 }
 
 pub fn process_docs(b: *Builder, obj: *LibExeObjStep) !*Step {
@@ -415,8 +430,10 @@ pub fn build(b: *Builder) !void {
     }
 
     // Link in Zig dependencies
-    try link(b, exe, &cfg, null);
-    try link(b, test_stage2, &cfg, &test_cfg);
+    const pkg_exe = try link(b, exe, &cfg, null);
+    exe.addPackage(pkg_exe.dependencies.?[0]); // We ignore the package, since we are already its root
+    const pkg_test_stage2 = try link(b, test_stage2, &cfg, &test_cfg);
+    test_stage2.addPackage(pkg_test_stage2.dependencies.?[0]);
 
     // Generate Docs
     var docgen_exe = b.addExecutable("docgen", "doc/docgen.zig");
