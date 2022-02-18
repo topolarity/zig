@@ -296,7 +296,7 @@ pub fn process_docs(b: *Builder, obj: *LibExeObjStep) !*Step {
         b.allocator,
         &[_][]const u8{ b.cache_root, "langref.html" },
     ) catch unreachable;
-    var docgen_cmd = obj.run();
+    const docgen_cmd = obj.run();
     docgen_cmd.addArgs(&[_][]const u8{
         rel_zig_exe,
         "doc" ++ fs.path.sep_str ++ "langref.html.in",
@@ -436,7 +436,7 @@ pub fn build(b: *Builder) !void {
     test_stage2.addPackage(pkg_test_stage2.dependencies.?[0]);
 
     // Generate Docs
-    var docgen_exe = b.addExecutable("docgen", "doc/docgen.zig");
+    const docgen_exe = b.addExecutable("docgen", "doc/docgen.zig");
     docgen_exe.single_threaded = exe.single_threaded;
     const docs_step = try process_docs(b, docgen_exe);
 
@@ -635,8 +635,8 @@ fn addCxxKnownPath(
     errtxt: ?[]const u8,
     need_cpp_includes: bool,
 ) !void {
-    //if (!std.process.can_spawn)
-        //return error.RequiredLibraryNotFound;
+    if (!std.process.can_spawn)
+        return error.RequiredLibraryNotFound;
 
     const path_padded = try b.exec(&[_][]const u8{
         ctx.cxx_compiler,
@@ -784,15 +784,19 @@ fn toNativePathSep(b: *Builder, s: []const u8) []u8 {
 
 const softfloat_sources = [_][]const u8{
     "deps/SoftFloat-3e/source/8086/f128M_isSignalingNaN.c",
+    "deps/SoftFloat-3e/source/8086/extF80M_isSignalingNaN.c",
     "deps/SoftFloat-3e/source/8086/s_commonNaNToF128M.c",
+    "deps/SoftFloat-3e/source/8086/s_commonNaNToExtF80M.c",
     "deps/SoftFloat-3e/source/8086/s_commonNaNToF16UI.c",
     "deps/SoftFloat-3e/source/8086/s_commonNaNToF32UI.c",
     "deps/SoftFloat-3e/source/8086/s_commonNaNToF64UI.c",
     "deps/SoftFloat-3e/source/8086/s_f128MToCommonNaN.c",
+    "deps/SoftFloat-3e/source/8086/s_extF80MToCommonNaN.c",
     "deps/SoftFloat-3e/source/8086/s_f16UIToCommonNaN.c",
     "deps/SoftFloat-3e/source/8086/s_f32UIToCommonNaN.c",
     "deps/SoftFloat-3e/source/8086/s_f64UIToCommonNaN.c",
     "deps/SoftFloat-3e/source/8086/s_propagateNaNF128M.c",
+    "deps/SoftFloat-3e/source/8086/s_propagateNaNExtF80M.c",
     "deps/SoftFloat-3e/source/8086/s_propagateNaNF16UI.c",
     "deps/SoftFloat-3e/source/8086/softfloat_raiseFlags.c",
     "deps/SoftFloat-3e/source/f128M_add.c",
@@ -812,6 +816,7 @@ const softfloat_sources = [_][]const u8{
     "deps/SoftFloat-3e/source/f128M_to_f16.c",
     "deps/SoftFloat-3e/source/f128M_to_f32.c",
     "deps/SoftFloat-3e/source/f128M_to_f64.c",
+    "deps/SoftFloat-3e/source/f128M_to_extF80M.c",
     "deps/SoftFloat-3e/source/f128M_to_i32.c",
     "deps/SoftFloat-3e/source/f128M_to_i32_r_minMag.c",
     "deps/SoftFloat-3e/source/f128M_to_i64.c",
@@ -820,6 +825,20 @@ const softfloat_sources = [_][]const u8{
     "deps/SoftFloat-3e/source/f128M_to_ui32_r_minMag.c",
     "deps/SoftFloat-3e/source/f128M_to_ui64.c",
     "deps/SoftFloat-3e/source/f128M_to_ui64_r_minMag.c",
+    "deps/SoftFloat-3e/source/extF80M_add.c",
+    "deps/SoftFloat-3e/source/extF80M_div.c",
+    "deps/SoftFloat-3e/source/extF80M_eq.c",
+    "deps/SoftFloat-3e/source/extF80M_le.c",
+    "deps/SoftFloat-3e/source/extF80M_lt.c",
+    "deps/SoftFloat-3e/source/extF80M_mul.c",
+    "deps/SoftFloat-3e/source/extF80M_rem.c",
+    "deps/SoftFloat-3e/source/extF80M_roundToInt.c",
+    "deps/SoftFloat-3e/source/extF80M_sqrt.c",
+    "deps/SoftFloat-3e/source/extF80M_sub.c",
+    "deps/SoftFloat-3e/source/extF80M_to_f16.c",
+    "deps/SoftFloat-3e/source/extF80M_to_f32.c",
+    "deps/SoftFloat-3e/source/extF80M_to_f64.c",
+    "deps/SoftFloat-3e/source/extF80M_to_f128M.c",
     "deps/SoftFloat-3e/source/f16_add.c",
     "deps/SoftFloat-3e/source/f16_div.c",
     "deps/SoftFloat-3e/source/f16_eq.c",
@@ -831,16 +850,20 @@ const softfloat_sources = [_][]const u8{
     "deps/SoftFloat-3e/source/f16_roundToInt.c",
     "deps/SoftFloat-3e/source/f16_sqrt.c",
     "deps/SoftFloat-3e/source/f16_sub.c",
+    "deps/SoftFloat-3e/source/f16_to_extF80M.c",
     "deps/SoftFloat-3e/source/f16_to_f128M.c",
     "deps/SoftFloat-3e/source/f16_to_f64.c",
     "deps/SoftFloat-3e/source/f32_to_f128M.c",
+    "deps/SoftFloat-3e/source/f32_to_extF80M.c",
     "deps/SoftFloat-3e/source/f64_to_f128M.c",
+    "deps/SoftFloat-3e/source/f64_to_extF80M.c",
     "deps/SoftFloat-3e/source/f64_to_f16.c",
     "deps/SoftFloat-3e/source/i32_to_f128M.c",
     "deps/SoftFloat-3e/source/s_add256M.c",
     "deps/SoftFloat-3e/source/s_addCarryM.c",
     "deps/SoftFloat-3e/source/s_addComplCarryM.c",
     "deps/SoftFloat-3e/source/s_addF128M.c",
+    "deps/SoftFloat-3e/source/s_addExtF80M.c",
     "deps/SoftFloat-3e/source/s_addM.c",
     "deps/SoftFloat-3e/source/s_addMagsF16.c",
     "deps/SoftFloat-3e/source/s_addMagsF32.c",
@@ -851,12 +874,14 @@ const softfloat_sources = [_][]const u8{
     "deps/SoftFloat-3e/source/s_approxRecip_1Ks.c",
     "deps/SoftFloat-3e/source/s_compare128M.c",
     "deps/SoftFloat-3e/source/s_compare96M.c",
+    "deps/SoftFloat-3e/source/s_compareNonnormExtF80M.c",
     "deps/SoftFloat-3e/source/s_countLeadingZeros16.c",
     "deps/SoftFloat-3e/source/s_countLeadingZeros32.c",
     "deps/SoftFloat-3e/source/s_countLeadingZeros64.c",
     "deps/SoftFloat-3e/source/s_countLeadingZeros8.c",
     "deps/SoftFloat-3e/source/s_eq128.c",
     "deps/SoftFloat-3e/source/s_invalidF128M.c",
+    "deps/SoftFloat-3e/source/s_invalidExtF80M.c",
     "deps/SoftFloat-3e/source/s_isNaNF128M.c",
     "deps/SoftFloat-3e/source/s_le128.c",
     "deps/SoftFloat-3e/source/s_lt128.c",
@@ -867,7 +892,9 @@ const softfloat_sources = [_][]const u8{
     "deps/SoftFloat-3e/source/s_mulAddF32.c",
     "deps/SoftFloat-3e/source/s_mulAddF64.c",
     "deps/SoftFloat-3e/source/s_negXM.c",
+    "deps/SoftFloat-3e/source/s_normExtF80SigM.c",
     "deps/SoftFloat-3e/source/s_normRoundPackMToF128M.c",
+    "deps/SoftFloat-3e/source/s_normRoundPackMToExtF80M.c",
     "deps/SoftFloat-3e/source/s_normRoundPackToF16.c",
     "deps/SoftFloat-3e/source/s_normRoundPackToF32.c",
     "deps/SoftFloat-3e/source/s_normRoundPackToF64.c",
@@ -878,6 +905,7 @@ const softfloat_sources = [_][]const u8{
     "deps/SoftFloat-3e/source/s_remStepMBy32.c",
     "deps/SoftFloat-3e/source/s_roundMToI64.c",
     "deps/SoftFloat-3e/source/s_roundMToUI64.c",
+    "deps/SoftFloat-3e/source/s_roundPackMToExtF80M.c",
     "deps/SoftFloat-3e/source/s_roundPackMToF128M.c",
     "deps/SoftFloat-3e/source/s_roundPackToF16.c",
     "deps/SoftFloat-3e/source/s_roundPackToF32.c",
@@ -906,9 +934,12 @@ const softfloat_sources = [_][]const u8{
     "deps/SoftFloat-3e/source/s_subMagsF32.c",
     "deps/SoftFloat-3e/source/s_subMagsF64.c",
     "deps/SoftFloat-3e/source/s_tryPropagateNaNF128M.c",
+    "deps/SoftFloat-3e/source/s_tryPropagateNaNExtF80M.c",
     "deps/SoftFloat-3e/source/softfloat_state.c",
     "deps/SoftFloat-3e/source/ui32_to_f128M.c",
     "deps/SoftFloat-3e/source/ui64_to_f128M.c",
+    "deps/SoftFloat-3e/source/ui32_to_extF80M.c",
+    "deps/SoftFloat-3e/source/ui64_to_extF80M.c",
 };
 
 const stage1_sources = [_][]const u8{
