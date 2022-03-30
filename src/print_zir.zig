@@ -461,7 +461,6 @@ const Writer = struct {
             .error_return_trace,
             .frame,
             .frame_address,
-            .builtin_src,
             => try self.writeExtNode(stream, extended),
 
             .dbg_block_begin,
@@ -486,6 +485,11 @@ const Writer = struct {
             .union_decl => try self.writeUnionDecl(stream, extended),
             .enum_decl => try self.writeEnumDecl(stream, extended),
             .opaque_decl => try self.writeOpaqueDecl(stream, extended),
+
+            .builtin_src => {
+                const inst_data = self.code.extraData(Zir.Inst.LineColumn, extended.operand).data;
+                try stream.print(":{d}:{d}))", .{ inst_data.line, inst_data.column });
+            },
 
             .c_undef, .c_include, .wasm_memory_size => {
                 const inst_data = self.code.extraData(Zir.Inst.UnNode, extended.operand).data;
