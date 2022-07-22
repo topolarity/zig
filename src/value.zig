@@ -2845,6 +2845,13 @@ pub const Value = extern union {
         };
     }
 
+    /// Payload of the error union, null if the error union contains an error.
+    pub fn errorUnionPayload(val: Value) ?Value {
+        if (!val.errorUnionIsPayload()) return null;
+
+        return val.castTag(.eu_payload).?.data;
+    }
+
     /// Value of the optional, null if optional has no payload.
     pub fn optionalValue(val: Value) ?Value {
         if (val.isNull()) return null;

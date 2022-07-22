@@ -22270,36 +22270,32 @@ fn beginComptimePtrMutation(
             switch (parent.pointee) {
                 .direct => |val_ptr| {
                     const payload_ty = try parent.ty.optionalChildAlloc(sema.arena);
-                    switch (val_ptr.tag()) {
-                        .undef, .null_value => {
-                            // An optional has been initialized to undefined at comptime and now we
-                            // are for the first time setting the payload. We must change the
-                            // representation of the optional from `undef` to `opt_payload`.
-                            const arena = parent.beginArena(sema.mod);
-                            defer parent.finishArena(sema.mod);
+                    if (val_ptr.isUndef() or val_ptr.isNull()) {
+                        // An optional has been initialized to undefined at comptime and now we
+                        // are for the first time setting the payload. We must change the
+                        // representation of the optional from `undef` to `opt_payload`.
+                        const arena = parent.beginArena(sema.mod);
+                        defer parent.finishArena(sema.mod);
 
-                            const payload = try arena.create(Value.Payload.SubValue);
-                            payload.* = .{
-                                .base = .{ .tag = .opt_payload },
-                                .data = Value.undef,
-                            };
+                        const payload = try arena.create(Value.Payload.SubValue);
+                        payload.* = .{
+                            .base = .{ .tag = .opt_payload },
+                            .data = Value.undef,
+                        };
 
-                            val_ptr.* = Value.initPayload(&payload.base);
+                        val_ptr.* = Value.initPayload(&payload.base);
 
-                            return ComptimePtrMutationKit{
-                                .decl_ref_mut = parent.decl_ref_mut,
-                                .pointee = .{ .direct = &payload.data },
-                                .ty = payload_ty,
-                            };
-                        },
-                        .opt_payload => return ComptimePtrMutationKit{
+                        return ComptimePtrMutationKit{
                             .decl_ref_mut = parent.decl_ref_mut,
-                            .pointee = .{ .direct = &val_ptr.castTag(.opt_payload).?.data },
+                            .pointee = .{ .direct = &payload.data },
                             .ty = payload_ty,
-                        },
-
-                        else => unreachable,
+                        };
                     }
+                    return ComptimePtrMutationKit{
+                        .decl_ref_mut = parent.decl_ref_mut,
+                        .pointee = .{ .direct = if (val_ptr.castTag(.opt_payload)) |p| &p.data else val_ptr },
+                        .ty = payload_ty,
+                    };
                 },
                 .bad_decl_ty, .bad_ptr_ty => return parent,
                 // Even though the parent value type has well-defined memory layout, our
@@ -22580,8 +22576,8 @@ fn beginComptimePtrLoad(
                     (try sema.coerceInMemoryAllowed(block, tv.ty, payload_ptr.container_ty, false, target, src, src)) == .ok;
                 if (coerce_in_mem_ok) {
                     const payload_val = switch (ptr_val.tag()) {
-                        .eu_payload_ptr => tv.val.castTag(.eu_payload).?.data,
-                        .opt_payload_ptr => tv.val.castTag(.opt_payload).?.data,
+                        .eu_payload_ptr => tv.val.errorUnionPayload() orelse return sema.fail(block, src, "unable to unwrap error union", .{}),
+                        .opt_payload_ptr => tv.val.optionalValue() orelse return sema.fail(block, src, "unable to unwrap null", .{}),
                         else => unreachable,
                     };
                     tv.* = TypedValue{ .ty = payload_ty, .val = payload_val };
