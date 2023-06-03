@@ -4717,6 +4717,7 @@ fn semaDecl(mod: *Module, decl_index: Decl.Index) !bool {
         .wip_capture_scope = wip_captures.scope,
         .instructions = .{},
         .inlining = null,
+        .comptime_mutations = null,
         .is_comptime = true,
     };
     defer {
@@ -5667,6 +5668,7 @@ pub fn analyzeFnBody(mod: *Module, func: *Fn, arena: Allocator) SemaError!Air {
         .wip_capture_scope = wip_captures.scope,
         .instructions = .{},
         .inlining = null,
+        .comptime_mutations = null,
         .is_comptime = false,
     };
     defer inner_block.instructions.deinit(gpa);

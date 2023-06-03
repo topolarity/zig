@@ -234,6 +234,22 @@ pub const Block = struct {
 
     wip_capture_scope: *CaptureScope,
 
+    // TODO: Exhaustively inspect every block we create and hook in
+    //       the comptime_mutations correctly
+    //
+    // How do they work?
+    //   - Comptime blocks don't matter (no branches)
+    //   - Runtime blocks need to reconcile any modifications between all their branches
+    //
+    // - So, we can literally just save the prior value of the decl into the block
+    //   (or create a stack of saved push/pop values on the decl itself, which is
+    //    probably the right route long-term).
+    //
+    // -> The reason we need it in a list in the block is so that we can find it
+    //    later to do the popping. That feels like the right move to me, then.
+    //
+    comptime_mutations: ?*std.ArrayListUnmanaged(DivergentValue) = null,
+
     label: ?*Label = null,
     inlining: ?*Inlining,
     /// If runtime_index is not 0 then one of these is guaranteed to be non null.
@@ -339,6 +355,9 @@ pub const Block = struct {
         merges: Merges,
     };
 
+//    pub const ComptimeValueMerges = struct {
+//    };
+
     pub const Merges = struct {
         block_inst: Air.Inst.Index,
         /// Separate array list from break_inst_list so that it can be passed directly
@@ -374,6 +393,7 @@ pub const Block = struct {
             .instructions = .{},
             .wip_capture_scope = parent.wip_capture_scope,
             .label = null,
+            .comptime_mutations = null,
             .inlining = parent.inlining,
             .is_comptime = parent.is_comptime,
             .comptime_reason = parent.comptime_reason,
@@ -723,6 +743,13 @@ pub const Block = struct {
             return new_decl_index;
         }
     };
+
+    // Something like this?
+    // I don't hate it!
+    const DivergentValue = struct {
+        target: Value,
+        current: Value,
+    };
 };
 
 const LabeledBlock = struct {
@@ -780,8 +807,23 @@ fn resolveBody(
     return try sema.resolveInst(break_data.operand);
 }
 
+
+// TODO: Study some ZIR again to build some intuition here
+//
+//       We're close to understanding...
+
+// TODO: This is the function of interest where we need to merge
+//
+// Need to study `analyzeBodyInner` and then mostly just apply the merge to the block here unconditionally
 fn analyzeBodyRuntimeBreak(sema: *Sema, block: *Block, body: []const Zir.Inst.Index) !void {
+    //const stdout = std.io.getStdOut().writer();
+    //stdout.print("Hello, {s}!\n", .{"world"}) catch unreachable;
+//    sub_block.comptime_mutations = .{};
+//    defer sub_block.comptime_mutations
+//    sub_block.comptime_mutations.deinit(sema.gpa);
+
     _ = sema.analyzeBodyInner(block, body) catch |err| switch (err) {
+        // TODO: Understand ComptimeBreak again
         error.ComptimeBreak => {
             const zir_datas = sema.code.instructions.items(.data);
             const break_data = zir_datas[sema.comptime_break_inst].@"break";
@@ -794,6 +836,7 @@ fn analyzeBodyRuntimeBreak(sema: *Sema, block: *Block, body: []const Zir.Inst.In
         },
         else => |e| return e,
     };
+    //sema.mergeDivergentComptimeValues()
 }
 
 pub fn analyzeBody(
@@ -5467,6 +5510,7 @@ fn zirBlock(sema: *Sema, parent_block: *Block, inst: Zir.Inst.Index, force_compt
         .wip_capture_scope = parent_block.wip_capture_scope,
         .instructions = .{},
         .label = &label,
+        .comptime_mutations = null,
         .inlining = parent_block.inlining,
         .is_comptime = parent_block.is_comptime or force_comptime,
         .comptime_reason = parent_block.comptime_reason,
@@ -6785,6 +6829,7 @@ fn analyzeCall(
             .wip_capture_scope = wip_captures.scope,
             .instructions = .{},
             .label = null,
+            .comptime_mutations = null,
             .inlining = &inlining,
             .is_typeof = block.is_typeof,
             .is_comptime = is_comptime_call,
@@ -10975,6 +11020,7 @@ fn zirSwitchBlock(sema: *Sema, block: *Block, inst: Zir.Inst.Index) CompileError
         .wip_capture_scope = block.wip_capture_scope,
         .instructions = .{},
         .label = &label,
+        .comptime_mutations = null,
         .inlining = block.inlining,
         .is_comptime = block.is_comptime,
         .comptime_reason = block.comptime_reason,
@@ -17036,12 +17082,20 @@ fn zirCondbr(
     // We'll re-use the sub block to save on memory bandwidth, and yank out the
     // instructions array in between using it for the then block and else block.
     var sub_block = parent_block.makeSubBlock();
+
     sub_block.runtime_loop = null;
     sub_block.runtime_cond = cond_src;
     sub_block.runtime_index.increment();
     defer sub_block.instructions.deinit(gpa);
 
+    var transient_mutations: std.ArrayListUnmanaged(Block.DivergentValue) = .{};
+    sub_block.comptime_mutations = &transient_mutations;
+    defer sub_block.comptime_mutations.?.deinit(gpa);
+
     try sema.analyzeBodyRuntimeBreak(&sub_block, then_body);
+
+    // Now here, I want to remove the duplicate from the list
+
     const true_instructions = try sub_block.instructions.toOwnedSlice(gpa);
     defer gpa.free(true_instructions);
 
@@ -17214,6 +17268,7 @@ fn addRuntimeBreak(sema: *Sema, child_block: *Block, break_data: BreakData) !voi
                 .wip_capture_scope = child_block.wip_capture_scope,
                 .instructions = .{},
                 .label = &labeled_block.label,
+                .comptime_mutations = null,
                 .inlining = child_block.inlining,
                 .is_comptime = child_block.is_comptime,
             },
@@ -17226,6 +17281,7 @@ fn addRuntimeBreak(sema: *Sema, child_block: *Block, break_data: BreakData) !voi
         break :blk labeled_block;
     };
 
+    // TODO: Study this and maybe use the same strategy for our own implementation
     const operand = try sema.resolveInst(break_data.operand);
     const br_ref = try child_block.addBr(labeled_block.label.merges.block_inst, operand);
     try labeled_block.label.merges.results.append(sema.gpa, operand);
@@ -27254,6 +27310,28 @@ fn storePtrVal(
     operand_ty: Type,
 ) !void {
     var mut_kit = try sema.beginComptimePtrMutation(block, src, ptr_val, operand_ty);
+
+    // Here is where we should create our indirect value
+    //
+    // (which is then added to some kind of list for the
+    //  block which merges all of the values)
+    //
+    // -> Probably I should store these in the block
+    //
+    // Yeah, so in reality we're going to check if the current block has a "divergent entry" for this value:
+    //   - If we know the block returns, then we already have a target (it's the initial value)
+    //   - Otherwise, when adding a new divergent value we fill in current and then the merge will check
+    //     all the branches as needed.
+    //
+    // A. Try to mimic the merges and br_list approach
+    // B. Add new fields and do it our own way
+    //
+    // We almost certainly need some adaptation so that we can associate values with multiple allocations
+    //   -> I suspect we can get away with adding the value to a list
+    //      (which just does check/restore upon every merge)
+    //
+    // This is dope! There's a good chance we can get this working nicely and then move on to the pointer
+    // analysis, which will be (slightly) more challenging.
     try sema.checkComptimeVarStore(block, src, mut_kit.decl_ref_mut);
 
     switch (mut_kit.pointee) {
@@ -27268,7 +27346,24 @@ fn storePtrVal(
             const arena = mut_kit.beginArena(sema.mod);
             defer mut_kit.finishArena(sema.mod);
 
+            // So, interesting - The actual Value is re-used within the Decl but almost nothing else is...
+            // Which is pretty spectacularly wasteful. You'd ideally like to copy the operand value by overwriting
+            // this value (or introducing a temporary)
+            //
+            // Whatever. We can optimize that later.
+            //
+            // The key for us is that I believe the old value of the comptime is actually still valid memory...
+            // Which if true, means we just need to store the value.
+//            const decl = sema.mod.declPtr(mut_kit.decl_ref_mut.decl_index);
+//            const raw_arena = @fieldParentPtr(std.heap.ArenaAllocator, "state", decl.value_arena.?.state_acquired.?);
+
+//            const before = raw_arena.queryCapacity();
             val_ptr.* = try operand_val.copy(arena);
+//            const after = raw_arena.queryCapacity();
+//            if (after > before) {
+//                std.log.info("comptime ptr mutation: {} byte increase of {} bytes total",
+//                             .{after - before, after});
+//            }
         },
         .reinterpret => |reinterpret| {
             const target = sema.mod.getTarget();
@@ -27300,6 +27395,7 @@ fn storePtrVal(
 }
 
 const ComptimePtrMutationKit = struct {
+    // decl_index + runtime_index
     decl_ref_mut: Value.Payload.DeclRefMut.Data,
     pointee: union(enum) {
         /// The pointer type matches the actual comptime Value so a direct
